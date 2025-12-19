@@ -1,4 +1,53 @@
-*.md
-data/*
+# Dependencies
+node_modules/
+bun.lockb
 
+# Build outputs
+dist/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Data (keep structure, ignore actual data)
+data/raw/*
+data/normalized/*
+!data/raw/.gitkeep
+!data/normalized/.gitkeep
+!data/normalized/connections/.gitkeep
+!data/normalized/crossword/.gitkeep
+
+# Run artifacts
+runs/
+
+# Reports
+reports/
+
+# Logs
+*.log
+logs/
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Plan document (keep separate)
+*.md
+!README.md
+!CLAUDE.md
+
+# Temporary files
+*.tmp
+*.temp
+
+*.md
+!README.md
+data/*

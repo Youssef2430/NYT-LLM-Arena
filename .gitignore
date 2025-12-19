@@ -1,0 +1,4 @@
+*.md
+data/*
+
+.DS_Store

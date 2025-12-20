@@ -9,7 +9,7 @@
 
 > 🎯 **LLM Benchmark for NYT Crosswords and Connections puzzles**
 
-Evaluate Large Language Models on interactive puzzle-solving tasks with real-time progress tracking, concurrent execution, and detailed metrics.
+Evaluate Large Language Models on interactive puzzle-solving tasks with real-time progress tracking, concurrent execution, detailed metrics, and game-like visualizations.
 
 ---
 
@@ -20,6 +20,7 @@ Evaluate Large Language Models on interactive puzzle-solving tasks with real-tim
 | 🎯 **Game-Faithful Feedback** | Environments emulate exact NYT game mechanics |
 | 🔄 **Concurrent Workers** | Per-model workers run in parallel |
 | 📊 **Live Dashboard** | Beautiful real-time CLI with progress, metrics, activity |
+| 🎮 **Game Visualization** | Watch runs replay like the actual Connections game |
 | 🏆 **Leaderboard** | Automatic model ranking by success rate |
 | 💰 **Cost Tracking** | Token usage and OpenRouter API costs |
 | ⚡ **Performance Metrics** | Tokens/sec, solve times, latency tracking |
@@ -64,7 +65,134 @@ bun run run:suite -s suites/connections-test.json --dry-run
 
 # 4. Run the actual benchmark with live dashboard
 bun run run:suite -s suites/connections-test.json
+
+# 5. Visualize the results
+bun run cli visualize
 ```
+
+---
+
+## 🎮 Run Visualization
+
+After running benchmarks, use the `visualize` command to replay runs with an animated, game-like display that mirrors the actual NYT Connections interface.
+
+### Visualization Features
+
+- **4x4 Word Grid** - Words displayed in a grid just like the real game
+- **Animated Transitions** - Watch the game unfold step by step
+- **Color-Coded Groups** - Found groups stack at top with difficulty colors (🟡 yellow, 🟢 green, 🔵 blue, 🟣 purple)
+- **Hearts Indicator** - Visual mistakes remaining (❤️ ❤️ ❤️ ❤️)
+- **Progress Bar** - Track completion percentage
+- **Interactive Mode** - Step through at your own pace with keyboard
+- **Multi-Game Grid** - Watch multiple games side-by-side in a grid layout
+- **Pretty Borders** - Rounded corners and clean card-based design
+
+### Usage
+
+```bash
+# List all available runs
+bun run cli visualize --list
+
+# Watch the most recent run (auto-play)
+bun run cli visualize
+
+# Watch a specific run by ID
+bun run cli visualize -r <runId>
+
+# Watch runs by a specific model (most recent)
+bun run cli visualize -m gemini
+bun run cli visualize -m claude
+bun run cli visualize -m gpt
+
+# Watch runs for a specific puzzle
+bun run cli visualize -p 2023-06-12
+
+# Control animation speed (milliseconds between steps)
+bun run cli visualize --speed 500      # Faster
+bun run cli visualize --speed 3000     # Slower
+
+# Interactive mode - step through with keyboard
+bun run cli visualize -i
+# Press SPACE or ENTER to advance, Q to quit
+
+# Multi-game grid view - watch 6 games at once
+bun run cli visualize -g 6
+
+# Customize grid columns (default: 3)
+bun run cli visualize -g 9 --columns 3
+
+# Combine options: 4 games, fast, interactive
+bun run cli visualize -g 4 --columns 2 --speed 500 -i
+```
+
+### Single Game View
+
+```
+  ╔════════════════════════════════════════════════════════════╗
+  ║                     🎯 NYT CONNECTIONS                     ║
+  ╚════════════════════════════════════════════════════════════╝
+
+  Model:  google/gemini-3-flash-preview
+  Puzzle: connections-2023-06-12    Step: 2/4
+
+  Mistakes remaining: ❤️ ❤️ ❤️ ❤️
+
+  ╭────────────────────────────────────────────────────────────╮
+  │                       WET WEATHER                          │
+  │                 HAIL, RAIN, SLEET, SNOW                    │
+  │                                                            │
+  │    BUCKS          SHIFT          OPTION          MOM       │
+  │     JAZZ          LEVEL          RETURN          TAB       │
+  │   RACECAR          NETS           HEAT          KAYAK      │
+  ╰────────────────────────────────────────────────────────────╯
+
+  ✅ ✓ WET WEATHER
+
+  Progress: [████████████████████░░░░░░░░░░░░░░░░░░░░] 50%
+
+  [SPACE/ENTER] Next step  [Q] Quit
+```
+
+### Multi-Game Grid View
+
+Watch multiple runs simultaneously with `--grid`:
+
+```
+  ╔══════════════════════════════════════════════════════════════════════╗
+  ║               🎯 NYT ARENA - MULTI-GAME VISUALIZATION                ║
+  ╚══════════════════════════════════════════════════════════════════════╝
+
+  Step 3/12  [█████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 25%
+  Watching 6 games
+
+  ╭─gemini-2.5-flash──────────────╮  ╭─gemini-3-flash────────────────╮  ╭─claude-haiku────────────────────╮
+  │ 🎮 3/12  ❤️❤️❤️❤️             │  │ ✅ 3/4  ❤️❤️❤️❤️              │  │ 🎮 3/8  ❤️❤️🖤🖤               │
+  ├──────────────────────────────┤  ├──────────────────────────────┤  ├────────────────────────────────┤
+  │       STREAMING SERVICES     │  │       STREAMING SERVICES     │  │  HULU     PRIME   NETFLIX  DOWN │
+  │  MUSTARD  TARTAR   KETCHUP   │  │          NBA TEAMS           │  │  BLUE     GLUM    LOW     PLUM  │
+  │  BLUE     SCARLET  RELISH    │  │  SHIFT    OPTION   RETURN    │  │  GREEN    MAYO    MUSTARD RELISH│
+  │  GREEN    MAYO     LOW       │  │  TAB      MOM      LEVEL     │  │  KETCHUP  TARTAR  SCARLET PEACOCK│
+  ├──────────────────────────────┤  ├──────────────────────────────┤  ├────────────────────────────────┤
+  │ ✓ STREAMING SERVICES         │  │ ✓ NBA TEAMS                  │  │ One away!                      │
+  ╰──────────────────────────────╯  ╰──────────────────────────────╯  ╰────────────────────────────────╯
+
+  Press Ctrl+C to exit
+```
+
+### Visualize Command Options
+
+| Option | Description |
+|--------|-------------|
+| `-r, --run <runId>` | Visualize a specific run by ID |
+| `-m, --model <modelId>` | Filter by model name (partial match) |
+| `-p, --puzzle <puzzleId>` | Filter by puzzle ID (partial match) |
+| `-l, --list` | List recent runs in a table |
+| `-n, --limit <n>` | Number of runs to list (default: 10) |
+| `-s, --speed <ms>` | Animation speed in milliseconds (default: 1500) |
+| `-i, --interactive` | Step through with keyboard controls |
+| `-g, --grid <n>` | Watch n games in a grid layout |
+| `--columns <n>` | Number of columns in grid view (default: 3) |
+| `-o, --output <dir>` | Runs directory (default: "runs") |
 
 ---
 
@@ -126,11 +254,14 @@ Success Rate: 66.7%     ✗ Failed: 5          Avg Tokens/s: 289.3    API Time: 
 ## 📖 CLI Commands
 
 ```bash
-# Main CLI
+# Main CLI help
 bun run cli --help
 
 # Run a benchmark suite (with dashboard)
 bun run cli run -s <suite.json> [-o <output-dir>] [--dry-run] [--no-dashboard]
+
+# Visualize completed runs
+bun run cli visualize [options]
 
 # Normalize raw data
 bun run cli normalize -t connections|crossword
@@ -141,6 +272,16 @@ bun run cli list [-t <type>] [-l <limit>]
 # List OpenRouter models
 bun run cli models [-f <filter>]
 ```
+
+### Command Reference
+
+| Command | Description |
+|---------|-------------|
+| `run` | Execute a benchmark suite with live dashboard |
+| `visualize` | Replay runs with animated game-like visualization |
+| `normalize` | Convert raw puzzle data to normalized format |
+| `list` | Display available puzzles |
+| `models` | Query available models from OpenRouter |
 
 ---
 
@@ -205,12 +346,14 @@ NYT_Arena/
 │   ├── runner/               # Benchmark runners
 │   │   ├── runner.ts         # Legacy runner
 │   │   └── concurrent-runner.ts # Per-model workers
-│   └── schemas/              # Zod validation schemas
+│   ├── schemas/              # Zod validation schemas
+│   └── visualizer/           # Run visualization
+│       └── index.ts          # Animated game replay
 ├── data/
 │   ├── raw/                  # Raw puzzle data
 │   └── normalized/           # Canonical JSON format
 ├── suites/                   # Benchmark configurations
-├── runs/                     # Output artifacts
+├── runs/                     # Output artifacts (per-run steps & summaries)
 └── reports/                  # Generated reports
 ```
 
@@ -227,6 +370,7 @@ NYT_Arena/
 | **Feedback** | Correct, incorrect, "one away" hints |
 | **Actions** | `submit_group`, `give_up` |
 | **Puzzles** | 918+ available (June 2023 - present) |
+| **Visualization** | Full animated grid replay |
 
 ### Crossword
 
@@ -236,6 +380,7 @@ NYT_Arena/
 | **Actions** | `fill_entry`, `clear_entry`, `check_entry`, `submit_puzzle`, `give_up` |
 | **Options** | `allowChecks`, `allowReveals` (suite config) |
 | **Puzzles** | NYT crosswords 1977-2018 (requires re-acquisition) |
+| **Visualization** | Static step-by-step replay |
 
 ---
 
@@ -263,6 +408,9 @@ bun test
 
 # List normalized puzzles
 bun run list -t connections -l 20
+
+# Test visualizer
+bun run cli visualize --list
 ```
 
 ---
@@ -273,6 +421,55 @@ bun run list -t connections -l 20
 |----------|-------------|----------|
 | `OPENROUTER_API_KEY` | OpenRouter API key | ✅ Yes |
 | `LOG_LEVEL` | Logging level (debug, info, warn, error) | ❌ No |
+
+---
+
+## 📋 Workflow Example
+
+Here's a complete workflow from setup to visualization:
+
+```bash
+# 1. Setup
+bun install
+cp .env.example .env
+# Add your OPENROUTER_API_KEY to .env
+
+# 2. Prepare data
+bun run cli normalize -t connections
+
+# 3. Create a test suite (or use existing)
+cat > suites/quick-test.json << 'EOF'
+{
+  "name": "quick-test",
+  "models": ["google/gemini-2.0-flash-001"],
+  "puzzles": { "type": "connections", "limit": 3 },
+  "repeats": 1,
+  "maxSteps": 20,
+  "openRouter": { "temperature": 0, "maxTokens": 512 }
+}
+EOF
+
+# 4. Run benchmark
+bun run cli run -s suites/quick-test.json
+
+# 5. List completed runs
+bun run cli visualize --list
+
+# 6. Watch the most recent run
+bun run cli visualize
+
+# 7. Watch interactively (step through with spacebar)
+bun run cli visualize -i
+
+# 8. Watch a specific run at high speed
+bun run cli visualize -r <runId> --speed 500
+
+# 9. Watch multiple games in a grid (great for comparing models!)
+bun run cli visualize -g 6 --columns 3
+
+# 10. Multi-game grid with interactive stepping
+bun run cli visualize -g 4 --columns 2 -i --speed 1000
+```
 
 ---
 

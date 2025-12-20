@@ -9,6 +9,7 @@ import type {
   CrosswordPuzzle,
   Manifest,
 } from "../schemas/puzzles.js";
+import { visualizeRun } from "../visualizer/index.js";
 
 // ========================================
 // Logger
@@ -488,6 +489,51 @@ function printSummary(results: any[]) {
     );
   }
 }
+
+// ========================================
+// Visualize Command
+// ========================================
+
+program
+  .command("visualize")
+  .description(
+    "Visualize a run turn-by-turn in the CLI (animated like the real game)",
+  )
+  .option("-r, --run <runId>", "Specific run ID to visualize")
+  .option("-m, --model <modelId>", "Filter by model ID (shows most recent)")
+  .option("-p, --puzzle <puzzleId>", "Filter by puzzle ID (shows most recent)")
+  .option("-l, --list", "List recent runs")
+  .option("-n, --limit <n>", "Limit number of runs to list", "10")
+  .option("-s, --speed <ms>", "Animation speed in milliseconds", "1500")
+  .option(
+    "-i, --interactive",
+    "Step through with keyboard (space/enter to advance, q to quit)",
+  )
+  .option(
+    "-g, --grid <n>",
+    "Watch multiple games in a grid layout (e.g., -g 6 for 6 games)",
+  )
+  .option("--columns <n>", "Number of columns in grid view", "3")
+  .option("-o, --output <dir>", "Runs directory", "runs")
+  .action(async (options) => {
+    try {
+      await visualizeRun({
+        runsDir: options.output,
+        runId: options.run,
+        modelId: options.model,
+        puzzleId: options.puzzle,
+        listRuns: options.list,
+        limit: parseInt(options.limit, 10),
+        speed: parseInt(options.speed, 10),
+        interactive: options.interactive,
+        grid: options.grid ? parseInt(options.grid, 10) : 0,
+        columns: parseInt(options.columns, 10),
+      });
+    } catch (error) {
+      console.error(chalk.red("\nError:"), error);
+      process.exit(1);
+    }
+  });
 
 // ========================================
 // Run CLI

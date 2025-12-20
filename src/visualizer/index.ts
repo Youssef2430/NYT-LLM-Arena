@@ -242,7 +242,7 @@ const MINI_CARD_WIDTH = 36;
 const MINI_CELL_WIDTH = 8;
 
 function centerText(text: string, width: number): string {
-  const visibleLength = stripAnsi(text).length;
+  const visibleLength = displayWidth(text);
   const padding = Math.max(0, width - visibleLength);
   const leftPad = Math.floor(padding / 2);
   const rightPad = padding - leftPad;
@@ -251,6 +251,43 @@ function centerText(text: string, width: number): string {
 
 function stripAnsi(str: string): string {
   return str.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
+// Calculate display width accounting for emojis (which typically render as 2 chars wide)
+function displayWidth(str: string): number {
+  const plain = stripAnsi(str);
+  let width = 0;
+  for (const char of plain) {
+    const code = char.codePointAt(0) || 0;
+    // Emoji ranges and other wide characters
+    if (
+      (code >= 0x1f300 && code <= 0x1f9ff) || // Misc Symbols, Emoticons, etc.
+      (code >= 0x2600 && code <= 0x26ff) || // Misc symbols
+      (code >= 0x2700 && code <= 0x27bf) || // Dingbats
+      (code >= 0x1f600 && code <= 0x1f64f) || // Emoticons
+      (code >= 0x1f680 && code <= 0x1f6ff) || // Transport symbols
+      (code >= 0x2300 && code <= 0x23ff) || // Misc technical
+      (code >= 0x2b50 && code <= 0x2b55) || // Stars, circles
+      (code >= 0x1f1e0 && code <= 0x1f1ff) || // Flags
+      code === 0x2764 || // ❤ heart
+      code === 0x1f5a4 // 🖤 black heart
+    ) {
+      width += 2;
+    } else if (code === 0xfe0f) {
+      // Variation selector - skip (already counted with base emoji)
+      continue;
+    } else {
+      width += 1;
+    }
+  }
+  return width;
+}
+
+// Pad string to exact display width
+function padToWidth(str: string, targetWidth: number): string {
+  const currentWidth = displayWidth(str);
+  const padding = Math.max(0, targetWidth - currentWidth);
+  return str + " ".repeat(padding);
 }
 
 function truncateText(text: string, maxWidth: number): string {
@@ -317,8 +354,7 @@ function renderMiniCard(state: GameState, summary: RunSummary): string[] {
   lines.push(
     chalk.cyan(BOX.vertical) +
       " " +
-      statusLine +
-      " ".repeat(Math.max(0, innerWidth - stripAnsi(statusLine).length - 1)) +
+      padToWidth(statusLine, innerWidth - 1) +
       chalk.cyan(BOX.vertical),
   );
 
@@ -347,13 +383,15 @@ function renderMiniCard(state: GameState, summary: RunSummary): string[] {
       const isSelected = selectedSet.has(word.toUpperCase());
       return renderMiniCell(word, isSelected);
     });
+    // Pad to exactly 4 cells if row has fewer
+    while (cells.length < 4) {
+      cells.push(" ".repeat(MINI_CELL_WIDTH));
+    }
     const rowStr = cells.join(" ");
-    const rowPadding = Math.max(0, innerWidth - stripAnsi(rowStr).length - 1);
     lines.push(
       chalk.cyan(BOX.vertical) +
         " " +
-        rowStr +
-        " ".repeat(rowPadding) +
+        padToWidth(rowStr, innerWidth - 1) +
         chalk.cyan(BOX.vertical),
     );
   }
@@ -383,8 +421,7 @@ function renderMiniCard(state: GameState, summary: RunSummary): string[] {
     lines.push(
       chalk.cyan(BOX.vertical) +
         " " +
-        msgColor(msgDisplay) +
-        " ".repeat(Math.max(0, innerWidth - msgDisplay.length - 1)) +
+        msgColor(padToWidth(msgDisplay, innerWidth - 1)) +
         chalk.cyan(BOX.vertical),
     );
   }
@@ -692,13 +729,14 @@ function combineCardsHorizontally(
     // Find max height in this row
     const maxHeight = Math.max(...rowCards.map((c) => c.length));
 
-    // Pad each card to max height
+    // Pad each card to max height and ensure consistent width
     const paddedCards = rowCards.map((card) => {
-      const cardWidth = card[0] ? stripAnsi(card[0]).length : MINI_CARD_WIDTH;
+      const cardWidth = card[0] ? displayWidth(card[0]) : MINI_CARD_WIDTH;
       while (card.length < maxHeight) {
         card.push(" ".repeat(cardWidth));
       }
-      return card;
+      // Ensure every line has the same display width
+      return card.map((line) => padToWidth(line, cardWidth));
     });
 
     // Combine line by line

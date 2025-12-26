@@ -2,6 +2,7 @@ import chalk from "chalk";
 import { join } from "path";
 import { readdir, stat } from "fs/promises";
 import type { StepRecord, RunSummary } from "../schemas/config.js";
+import { renderVisualizerApp, type GameData } from "./components/index.js";
 
 // ========================================
 // Types
@@ -60,15 +61,99 @@ const DOUBLE_BOX = {
   vertical: "║",
 };
 
+const THICK_BOX = {
+  topLeft: "┏",
+  topRight: "┓",
+  bottomLeft: "┗",
+  bottomRight: "┛",
+  horizontal: "━",
+  vertical: "┃",
+};
+
+// ========================================
+// Gradient and Animation Helpers
+// ========================================
+
+const GRADIENT_CHARS = [" ", "░", "▒", "▓", "█"];
+const SPARKLES = ["✦", "✧", "✶", "✷", "✸", "✹", "⭐", "💫"];
+const CELEBRATION = ["🎉", "🎊", "🌟", "✨", "💥", "🔥", "⚡", "🏆"];
+
+// Gradient color palette for smooth transitions
+const GRADIENT_COLORS = [
+  "#FF6B6B", // coral red
+  "#4ECDC4", // teal
+  "#45B7D1", // sky blue
+  "#96CEB4", // sage green
+  "#FFEAA7", // soft yellow
+  "#DDA0DD", // plum
+  "#98D8C8", // mint
+  "#F7DC6F", // gold
+];
+
+function createGradientText(text: string, colors: string[]): string {
+  const chars = text.split("");
+  return chars
+    .map((char, i) => {
+      const colorIndex = Math.floor((i / chars.length) * colors.length);
+      return chalk.hex(colors[colorIndex] || colors[0]!)(char);
+    })
+    .join("");
+}
+
+function createRainbowText(text: string): string {
+  const rainbowColors = [
+    "#FF0000",
+    "#FF7F00",
+    "#FFFF00",
+    "#00FF00",
+    "#0000FF",
+    "#4B0082",
+    "#9400D3",
+  ];
+  return createGradientText(text, rainbowColors);
+}
+
+function createProgressGradient(
+  progress: number,
+  width: number,
+): string {
+  const filled = Math.round(progress * width);
+  const empty = width - filled;
+
+  // Create gradient filled portion
+  let filledStr = "";
+  for (let i = 0; i < filled; i++) {
+    const ratio = i / width;
+    if (ratio < 0.5) {
+      filledStr += chalk.hex("#4ECDC4")("█");
+    } else if (ratio < 0.8) {
+      filledStr += chalk.hex("#45B7D1")("█");
+    } else {
+      filledStr += chalk.hex("#96CEB4")("█");
+    }
+  }
+
+  const emptyStr = chalk.gray("░".repeat(empty));
+  return filledStr + emptyStr;
+}
+
 // ========================================
 // Color helpers for difficulty levels
 // ========================================
 
 const levelBgColors: Record<string, (text: string) => string> = {
-  yellow: (t) => chalk.bgHex("#F9DF6D").hex("#000000")(t),
-  green: (t) => chalk.bgHex("#A0C35A").hex("#000000")(t),
-  blue: (t) => chalk.bgHex("#B0C4EF").hex("#000000")(t),
-  purple: (t) => chalk.bgHex("#BA81C5").hex("#000000")(t),
+  yellow: (t) => chalk.bgHex("#F9DF6D").hex("#1a1a1a").bold(t),
+  green: (t) => chalk.bgHex("#A0C35A").hex("#1a1a1a").bold(t),
+  blue: (t) => chalk.bgHex("#B0C4EF").hex("#1a1a1a").bold(t),
+  purple: (t) => chalk.bgHex("#BA81C5").hex("#1a1a1a").bold(t),
+};
+
+// Softer gradient versions for borders
+const levelBorderColors: Record<string, (text: string) => string> = {
+  yellow: (t) => chalk.hex("#F9DF6D")(t),
+  green: (t) => chalk.hex("#A0C35A")(t),
+  blue: (t) => chalk.hex("#B0C4EF")(t),
+  purple: (t) => chalk.hex("#BA81C5")(t),
 };
 
 const levelEmoji: Record<string, string> = {
@@ -79,18 +164,18 @@ const levelEmoji: Record<string, string> = {
 };
 
 const statusColors: Record<string, (text: string) => string> = {
-  success: chalk.bgGreen.black,
-  success_clean: chalk.bgGreen.black,
-  success_with_reveals: chalk.bgGreen.black,
-  fail: chalk.bgRed.white,
-  timeout: chalk.bgYellow.black,
-  error: chalk.bgRed.white,
-  gave_up: chalk.bgGray.white,
+  success: chalk.bgHex("#2ECC71").hex("#ffffff").bold,
+  success_clean: chalk.bgHex("#27AE60").hex("#ffffff").bold,
+  success_with_reveals: chalk.bgHex("#58D68D").hex("#1a1a1a").bold,
+  fail: chalk.bgHex("#E74C3C").hex("#ffffff").bold,
+  timeout: chalk.bgHex("#F39C12").hex("#1a1a1a").bold,
+  error: chalk.bgHex("#C0392B").hex("#ffffff").bold,
+  gave_up: chalk.bgHex("#7F8C8D").hex("#ffffff").bold,
 };
 
 const statusEmoji: Record<string, string> = {
   success: "✅",
-  success_clean: "✅",
+  success_clean: "🏆",
   success_with_reveals: "✅",
   fail: "❌",
   timeout: "⏱️",
@@ -238,8 +323,12 @@ async function loadSteps(runPath: string): Promise<StepRecord[]> {
 // Pretty Mini Card Rendering (for multi-game view)
 // ========================================
 
-const MINI_CARD_WIDTH = 36;
+// Card dimensions - carefully calculated for alignment
+// 4 cells × 8 chars each + 3 gaps × 1 char = 35 chars content
+// Plus 2 border chars + 2 padding chars = 39 total
+const MINI_CARD_WIDTH = 39;
 const MINI_CELL_WIDTH = 8;
+const MINI_INNER_WIDTH = MINI_CARD_WIDTH - 2; // Content area between borders
 
 function centerText(text: string, width: number): string {
   const visibleLength = displayWidth(text);
@@ -270,7 +359,9 @@ function displayWidth(str: string): number {
       (code >= 0x2b50 && code <= 0x2b55) || // Stars, circles
       (code >= 0x1f1e0 && code <= 0x1f1ff) || // Flags
       code === 0x2764 || // ❤ heart
-      code === 0x1f5a4 // 🖤 black heart
+      code === 0x1f5a4 || // 🖤 black heart
+      code === 0x2665 || // ♥ heart suit
+      code === 0x2661 // ♡ white heart suit
     ) {
       width += 2;
     } else if (code === 0xfe0f) {
@@ -295,145 +386,161 @@ function truncateText(text: string, maxWidth: number): string {
   return text.slice(0, maxWidth - 1) + "…";
 }
 
+// Render a single word cell with fixed width
 function renderMiniCell(word: string, isSelected: boolean): string {
-  const displayWord = truncateText(word.toUpperCase(), MINI_CELL_WIDTH - 1);
-  const padded = displayWord.padEnd(MINI_CELL_WIDTH - 1);
+  const maxWordLen = MINI_CELL_WIDTH - 2; // Leave room for padding
+  const displayWord = truncateText(word.toUpperCase(), maxWordLen);
+  const padded = displayWord.padEnd(maxWordLen);
 
   if (isSelected) {
-    return chalk.bgWhite.black(` ${padded}`);
+    return chalk.bgHex("#4ECDC4").hex("#1a1a1a").bold(` ${padded} `);
   } else {
-    return chalk.bgHex("#2a2a2a").white(` ${padded}`);
+    return chalk.bgHex("#2d2d2d").hex("#e0e0e0")(` ${padded} `);
   }
 }
 
-function renderMiniFoundGroup(group: {
-  level: string;
-  category: string;
-  words: string[];
-}): string[] {
-  const lines: string[] = [];
+// Render an empty cell with fixed width
+function renderEmptyCell(): string {
+  return " ".repeat(MINI_CELL_WIDTH);
+}
+
+function renderMiniFoundGroup(
+  group: { level: string; category: string; words: string[] },
+  innerWidth: number,
+): string {
   const colorFn = levelBgColors[group.level] || chalk.bgGray;
-  const innerWidth = MINI_CARD_WIDTH - 4;
+  const emoji = levelEmoji[group.level] || "⭐";
+  const categoryText = `${emoji} ${group.category.toUpperCase()}`;
+  const truncated = truncateText(categoryText, innerWidth - 2);
+  // Center and pad to exact width
+  return colorFn(centerText(truncated, innerWidth));
+}
 
-  const categoryDisplay = truncateText(
-    group.category.toUpperCase(),
-    innerWidth,
-  );
-  lines.push(colorFn(centerText(categoryDisplay, MINI_CARD_WIDTH - 2)));
-
-  return lines;
+// Create a row with exact width
+function makeRow(
+  borderColor: (s: string) => string,
+  content: string,
+  innerWidth: number,
+): string {
+  const paddedContent = padToWidth(content, innerWidth);
+  return borderColor(THICK_BOX.vertical) + paddedContent + borderColor(THICK_BOX.vertical);
 }
 
 function renderMiniCard(state: GameState, summary: RunSummary): string[] {
   const lines: string[] = [];
-  const innerWidth = MINI_CARD_WIDTH - 2;
+  const innerWidth = MINI_INNER_WIDTH;
 
   // Model name (shortened)
   const modelShort = summary.modelId.split("/").pop() || summary.modelId;
-  const modelDisplay = truncateText(modelShort, innerWidth - 2);
+  const modelDisplay = truncateText(modelShort, innerWidth - 4);
+  const modelDisplayLen = modelDisplay.length;
+
+  // Determine border color based on status
+  const isSuccess = ["success", "success_clean", "success_with_reveals"].includes(state.status);
+  const isFail = state.status === "fail";
+  const borderColor = isSuccess
+    ? chalk.hex("#2ECC71")
+    : isFail
+      ? chalk.hex("#E74C3C")
+      : chalk.hex("#4ECDC4");
 
   // Top border with model name
+  const topBorderPadding = Math.max(0, innerWidth - modelDisplayLen - 2);
   lines.push(
-    chalk.cyan(BOX.topLeft) +
-      chalk.cyan(BOX.horizontal) +
-      chalk.cyan.bold(modelDisplay) +
-      chalk.cyan(
-        BOX.horizontal.repeat(
-          Math.max(0, innerWidth - modelDisplay.length - 1),
-        ),
-      ) +
-      chalk.cyan(BOX.topRight),
+    borderColor(THICK_BOX.topLeft) +
+      borderColor(THICK_BOX.horizontal) +
+      chalk.white.bold(modelDisplay) +
+      borderColor(THICK_BOX.horizontal.repeat(topBorderPadding)) +
+      borderColor(THICK_BOX.topRight),
   );
 
-  // Status bar
-  const emoji = statusEmoji[state.status] || "🎮";
-  const stepInfo = `${state.stepIndex}/${state.totalSteps}`;
-  const hearts =
-    "❤️".repeat(state.mistakesLeft) + "🖤".repeat(4 - state.mistakesLeft);
-  const statusLine = `${emoji} ${stepInfo}  ${hearts}`;
-  lines.push(
-    chalk.cyan(BOX.vertical) +
-      " " +
-      padToWidth(statusLine, innerWidth - 1) +
-      chalk.cyan(BOX.vertical),
-  );
+  // Status bar: emoji + step info + hearts
+  const statusEmoj = statusEmoji[state.status] || "🎮";
+  const stepText = `${state.stepIndex}/${state.totalSteps}`;
+  // Build hearts string (using simple hearts for consistent width)
+  const heartsStr = "♥".repeat(state.mistakesLeft) + "♡".repeat(4 - state.mistakesLeft);
+  const statusContent = ` ${statusEmoj} ${chalk.hex("#F7DC6F")(stepText)}  ${chalk.hex("#E74C3C")(heartsStr)}`;
+  lines.push(makeRow(borderColor, statusContent, innerWidth));
 
   // Separator
+  const separatorChar = state.done ? "━" : "─";
   lines.push(
-    chalk.cyan(BOX.verticalRight) +
-      chalk.gray(BOX.horizontal.repeat(innerWidth)) +
-      chalk.cyan(BOX.verticalLeft),
+    borderColor(BOX.verticalRight) +
+      chalk.hex("#444")(separatorChar.repeat(innerWidth)) +
+      borderColor(BOX.verticalLeft),
   );
 
   // Found groups
   for (const group of state.foundGroups) {
-    const groupLines = renderMiniFoundGroup(group);
-    for (const gl of groupLines) {
-      lines.push(chalk.cyan(BOX.vertical) + gl + chalk.cyan(BOX.vertical));
-    }
+    const groupContent = renderMiniFoundGroup(group, innerWidth);
+    lines.push(borderColor(THICK_BOX.vertical) + groupContent + borderColor(THICK_BOX.vertical));
   }
 
   // Remaining words grid (4 words per row)
   const selectedSet = new Set(state.selectedWords.map((w) => w.toUpperCase()));
   const gridWords = [...state.remainingWords];
+  const numRows = Math.ceil(gridWords.length / 4);
 
-  for (let row = 0; row < Math.ceil(gridWords.length / 4); row++) {
+  for (let row = 0; row < numRows; row++) {
     const rowWords = gridWords.slice(row * 4, row * 4 + 4);
-    const cells = rowWords.map((word) => {
-      const isSelected = selectedSet.has(word.toUpperCase());
-      return renderMiniCell(word, isSelected);
-    });
-    // Pad to exactly 4 cells if row has fewer
-    while (cells.length < 4) {
-      cells.push(" ".repeat(MINI_CELL_WIDTH));
+    const cells: string[] = [];
+    
+    for (let col = 0; col < 4; col++) {
+      const word = rowWords[col];
+      if (word) {
+        const isSelected = selectedSet.has(word.toUpperCase());
+        cells.push(renderMiniCell(word, isSelected));
+      } else {
+        cells.push(renderEmptyCell());
+      }
     }
-    const rowStr = cells.join(" ");
-    lines.push(
-      chalk.cyan(BOX.vertical) +
-        " " +
-        padToWidth(rowStr, innerWidth - 1) +
-        chalk.cyan(BOX.vertical),
-    );
+    
+    const rowContent = " " + cells.join("") + " ";
+    lines.push(makeRow(borderColor, rowContent, innerWidth));
   }
 
-  // Message
+  // Message row (if any)
   if (state.message) {
+    // Separator before message
     lines.push(
-      chalk.cyan(BOX.verticalRight) +
-        chalk.gray(BOX.horizontal.repeat(innerWidth)) +
-        chalk.cyan(BOX.verticalLeft),
+      borderColor(BOX.verticalRight) +
+        chalk.hex("#444")(separatorChar.repeat(innerWidth)) +
+        borderColor(BOX.verticalLeft),
     );
+    
     let msgColor: (s: string) => string;
+    let msgIcon: string;
     switch (state.messageType) {
       case "success":
-        msgColor = chalk.green;
+        msgColor = chalk.hex("#2ECC71");
+        msgIcon = "✔";
         break;
       case "error":
-        msgColor = chalk.red;
+        msgColor = chalk.hex("#E74C3C");
+        msgIcon = "✖";
         break;
       case "warning":
-        msgColor = chalk.yellow;
+        msgColor = chalk.hex("#F39C12");
+        msgIcon = "⚠";
         break;
       default:
-        msgColor = chalk.gray;
+        msgColor = chalk.hex("#95A5A6");
+        msgIcon = "•";
     }
-    const msgDisplay = truncateText(state.message, innerWidth - 2);
-    lines.push(
-      chalk.cyan(BOX.vertical) +
-        " " +
-        msgColor(padToWidth(msgDisplay, innerWidth - 1)) +
-        chalk.cyan(BOX.vertical),
-    );
+    const msgText = truncateText(`${msgIcon} ${state.message}`, innerWidth - 2);
+    const msgContent = " " + msgColor(msgText);
+    lines.push(makeRow(borderColor, msgContent, innerWidth));
   }
 
   // Bottom border
   lines.push(
-    chalk.cyan(BOX.bottomLeft) +
-      chalk.cyan(BOX.horizontal.repeat(innerWidth)) +
-      chalk.cyan(BOX.bottomRight),
+    borderColor(THICK_BOX.bottomLeft) +
+      borderColor(THICK_BOX.horizontal.repeat(innerWidth)) +
+      borderColor(THICK_BOX.bottomRight),
   );
 
-  return lines;
+  // Ensure all lines have exactly the same display width
+  return lines.map((line) => padToWidth(line, MINI_CARD_WIDTH));
 }
 
 // ========================================
@@ -723,29 +830,35 @@ function combineCardsHorizontally(
   const result: string[] = [];
   const gapStr = " ".repeat(gap);
 
+  // Process cards in chunks of cardsPerRow
   for (let i = 0; i < cards.length; i += cardsPerRow) {
     const rowCards = cards.slice(i, i + cardsPerRow);
 
     // Find max height in this row
     const maxHeight = Math.max(...rowCards.map((c) => c.length));
 
-    // Pad each card to max height and ensure consistent width
+    // Pad each card to max height and ensure consistent width (MINI_CARD_WIDTH)
     const paddedCards = rowCards.map((card) => {
-      const cardWidth = card[0] ? displayWidth(card[0]) : MINI_CARD_WIDTH;
-      while (card.length < maxHeight) {
-        card.push(" ".repeat(cardWidth));
+      // Make a copy to avoid mutating original
+      const cardCopy = [...card];
+      // Pad to max height
+      while (cardCopy.length < maxHeight) {
+        cardCopy.push(" ".repeat(MINI_CARD_WIDTH));
       }
-      // Ensure every line has the same display width
-      return card.map((line) => padToWidth(line, cardWidth));
+      // Ensure every line has exactly MINI_CARD_WIDTH display width
+      return cardCopy.map((line) => padToWidth(line, MINI_CARD_WIDTH));
     });
 
     // Combine line by line
     for (let line = 0; line < maxHeight; line++) {
-      const lineParts = paddedCards.map((card) => card[line] || "");
+      const lineParts = paddedCards.map((card) => card[line] || " ".repeat(MINI_CARD_WIDTH));
       result.push("  " + lineParts.join(gapStr));
     }
 
-    result.push(""); // Gap between rows
+    // Only add gap between rows if there are more rows coming
+    if (i + cardsPerRow < cards.length) {
+      result.push("");
+    }
   }
 
   return result;
@@ -893,47 +1006,75 @@ function renderSingleGameScreen(
   const lines: string[] = [];
   const innerWidth = CARD_WIDTH - 2;
 
-  // Header
+  // Determine theme colors based on game progress
+  const isSuccess = ["success", "success_clean", "success_with_reveals"].includes(state.status);
+  const isFail = state.status === "fail";
+  const accentColor = isSuccess
+    ? chalk.hex("#2ECC71")
+    : isFail
+      ? chalk.hex("#E74C3C")
+      : chalk.hex("#4ECDC4");
+  const accentBold = isSuccess
+    ? chalk.hex("#2ECC71").bold
+    : isFail
+      ? chalk.hex("#E74C3C").bold
+      : chalk.hex("#4ECDC4").bold;
+
+  // Header with gradient effect
   lines.push("");
+  const headerBorder = THICK_BOX.horizontal.repeat(CARD_WIDTH);
   lines.push(
-    chalk.cyan.bold(
-      `  ${DOUBLE_BOX.topLeft}${DOUBLE_BOX.horizontal.repeat(CARD_WIDTH)}${DOUBLE_BOX.topRight}`,
+    accentBold(
+      `  ${THICK_BOX.topLeft}${headerBorder}${THICK_BOX.topRight}`,
     ),
   );
+  
+  // Title with sparkles
+  const titleText = "✨ NYT CONNECTIONS ✨";
   lines.push(
-    chalk.cyan.bold(`  ${DOUBLE_BOX.vertical}`) +
-      chalk.white.bold(centerText("🎯 NYT CONNECTIONS", CARD_WIDTH)) +
-      chalk.cyan.bold(DOUBLE_BOX.vertical),
+    accentBold(`  ${THICK_BOX.vertical}`) +
+      chalk.white.bold(centerText(titleText, CARD_WIDTH)) +
+      accentBold(THICK_BOX.vertical),
   );
   lines.push(
-    chalk.cyan.bold(
-      `  ${DOUBLE_BOX.bottomLeft}${DOUBLE_BOX.horizontal.repeat(CARD_WIDTH)}${DOUBLE_BOX.bottomRight}`,
+    accentBold(
+      `  ${THICK_BOX.bottomLeft}${headerBorder}${THICK_BOX.bottomRight}`,
     ),
   );
   lines.push("");
 
-  // Model and puzzle info
+  // Model and puzzle info with better formatting
   const modelShort =
     summary.modelId.length > 45
       ? summary.modelId.slice(0, 42) + "..."
       : summary.modelId;
-  lines.push(chalk.gray(`  Model:  ${chalk.cyan(modelShort)}`));
   lines.push(
-    chalk.gray(
-      `  Puzzle: ${chalk.yellow(summary.puzzleId)}    Step: ${chalk.white(`${state.stepIndex}/${state.totalSteps}`)}`,
-    ),
+    chalk.hex("#7F8C8D")("  ▸ Model:  ") + chalk.hex("#4ECDC4").bold(modelShort)
+  );
+  lines.push(
+    chalk.hex("#7F8C8D")("  ▸ Puzzle: ") + 
+    chalk.hex("#F7DC6F").bold(summary.puzzleId) + 
+    chalk.hex("#7F8C8D")("    ▸ Step: ") + 
+    chalk.white.bold(`${state.stepIndex}`) +
+    chalk.hex("#7F8C8D")(`/${state.totalSteps}`)
   );
   lines.push("");
 
-  // Mistakes indicator
-  const hearts =
-    "❤️ ".repeat(state.mistakesLeft) + "🖤 ".repeat(4 - state.mistakesLeft);
-  lines.push(`  Mistakes remaining: ${hearts}`);
+  // Mistakes indicator with animated-style hearts
+  const heartsDisplay = [];
+  for (let i = 0; i < 4; i++) {
+    if (i < state.mistakesLeft) {
+      heartsDisplay.push(chalk.hex("#E74C3C")("♥"));
+    } else {
+      heartsDisplay.push(chalk.hex("#444")("♡"));
+    }
+  }
+  lines.push(`  ${chalk.hex("#95A5A6")("Lives: ")} ${heartsDisplay.join(" ")}`);
   lines.push("");
 
-  // Card container
+  // Card container with gradient border
   lines.push(
-    chalk.gray(
+    accentColor(
       `  ${BOX.topLeft}${BOX.horizontal.repeat(CARD_WIDTH)}${BOX.topRight}`,
     ),
   );
@@ -947,63 +1088,66 @@ function renderSingleGameScreen(
   for (const line of gridLines) {
     const padding = Math.max(0, CARD_WIDTH - stripAnsi(line).length);
     lines.push(
-      chalk.gray(`  ${BOX.vertical}`) +
+      accentColor(`  ${BOX.vertical}`) +
         line +
         " ".repeat(padding) +
-        chalk.gray(BOX.vertical),
+        accentColor(BOX.vertical),
     );
   }
 
   lines.push(
-    chalk.gray(
+    accentColor(
       `  ${BOX.bottomLeft}${BOX.horizontal.repeat(CARD_WIDTH)}${BOX.bottomRight}`,
     ),
   );
   lines.push("");
 
-  // Message
+  // Message with styled indicators
   if (state.message) {
     let msgColor: (s: string) => string;
     let icon: string;
+    let bgStyle: (s: string) => string;
     switch (state.messageType) {
       case "success":
-        msgColor = chalk.green;
-        icon = "✅";
+        msgColor = chalk.hex("#2ECC71");
+        bgStyle = chalk.bgHex("#1a3a1a");
+        icon = "✔ ";
         break;
       case "error":
-        msgColor = chalk.red;
-        icon = "❌";
+        msgColor = chalk.hex("#E74C3C");
+        bgStyle = chalk.bgHex("#3a1a1a");
+        icon = "✖ ";
         break;
       case "warning":
-        msgColor = chalk.yellow;
-        icon = "⚠️ ";
+        msgColor = chalk.hex("#F39C12");
+        bgStyle = chalk.bgHex("#3a3a1a");
+        icon = "⚠ ";
         break;
       default:
-        msgColor = chalk.gray;
-        icon = "ℹ️ ";
+        msgColor = chalk.hex("#95A5A6");
+        bgStyle = (s) => s;
+        icon = "• ";
     }
-    lines.push(`  ${icon} ${msgColor(state.message)}`);
+    const msgBox = ` ${icon}${state.message} `;
+    lines.push(`  ${bgStyle(msgColor(msgBox))}`);
     lines.push("");
   }
 
-  // Progress bar
-  const progressWidth = 40;
-  const progress = Math.round(
-    (state.stepIndex / state.totalSteps) * progressWidth,
-  );
-  const progressBar =
-    chalk.green("█".repeat(progress)) +
-    chalk.gray("░".repeat(progressWidth - progress));
+  // Progress bar with gradient effect
+  const progressWidth = 50;
+  const progressRatio = state.totalSteps > 0 ? state.stepIndex / state.totalSteps : 0;
+  const progressBar = createProgressGradient(progressRatio, progressWidth);
+  const percentText = `${Math.round(progressRatio * 100)}%`;
   lines.push(
-    `  Progress: [${progressBar}] ${Math.round((state.stepIndex / state.totalSteps) * 100)}%`,
+    `  ${chalk.hex("#7F8C8D")("Progress")} [${progressBar}] ${chalk.white.bold(percentText)}`,
   );
   lines.push("");
 
-  // Instructions
+  // Instructions with styling
   lines.push(
     interactive
-      ? chalk.gray("  [SPACE/ENTER] Next step  [Q] Quit")
-      : chalk.gray("  Press Ctrl+C to exit"),
+      ? chalk.hex("#555")("  • ") + chalk.hex("#7F8C8D")("[SPACE/ENTER] Next step  ") + chalk.hex("#555")("• ") + chalk.hex("#7F8C8D")("[Q] Quit")
+      : chalk.hex("#555")("  • ") + chalk.hex("#7F8C8D")("Press Ctrl+C to exit"),
   );
   lines.push("");
 
@@ -1376,15 +1520,14 @@ export async function visualizeRun(options: {
     const selectedRuns = runs.slice(0, grid);
 
     // Load all steps
-    const games: MultiGameState[] = [];
+    const games: GameData[] = [];
     for (const run of selectedRuns) {
       const steps = await loadSteps(run.path);
       if (steps.length > 0) {
         games.push({
-          runInfo: run,
+          summary: run.summary,
           steps,
-          gameState: initializeGameState(steps),
-          currentStepIndex: -1,
+          state: {} as any, // Will be initialized by the component
         });
       }
     }
@@ -1394,7 +1537,13 @@ export async function visualizeRun(options: {
       return;
     }
 
-    await runMultiGameVisualization(games, speed, interactive, columns);
+    // Use new Ink-based visualizer
+    await renderVisualizerApp({
+      mode: "multi",
+      games,
+      speed,
+      interactive,
+    });
     return;
   }
 
@@ -1456,7 +1605,18 @@ export async function visualizeRun(options: {
 
   // Use appropriate visualization
   if (runInfo!.summary.task === "connections") {
-    await runSingleGameVisualization(runInfo!, steps, speed, interactive);
+    // Use new Ink-based visualizer for single game
+    const game: GameData = {
+      summary: runInfo!.summary,
+      steps,
+      state: {} as any, // Will be initialized by the component
+    };
+    await renderVisualizerApp({
+      mode: "single",
+      games: [game],
+      speed,
+      interactive,
+    });
   } else {
     renderStaticVisualization(runInfo!, steps);
   }

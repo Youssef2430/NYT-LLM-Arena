@@ -11,6 +11,8 @@
 
 Evaluate Large Language Models on interactive puzzle-solving tasks with real-time progress tracking, concurrent execution, detailed metrics, and game-like visualizations.
 
+![Demo](assets/demo.gif)
+
 ---
 
 ## ✨ Features
@@ -20,8 +22,8 @@ Evaluate Large Language Models on interactive puzzle-solving tasks with real-tim
 | 🎯 **Game-Faithful Feedback** | Environments emulate exact NYT game mechanics |
 | 🔄 **Concurrent Workers** | Per-model workers run in parallel |
 | 📊 **Live Dashboard** | Beautiful real-time CLI with progress, metrics, activity |
-| 🎮 **Game Visualization** | Watch runs replay like the actual Connections game |
-| 🏆 **Leaderboard** | Automatic model ranking by success rate |
+| 🎮 **Game Visualization** | Pure Ink (React) TUI with fixed 4×4 grid, animated transitions |
+| 🏆 **Global Leaderboard** | Aggregate statistics across all runs with trends and rankings |
 | 💰 **Cost Tracking** | Token usage and OpenRouter API costs |
 | ⚡ **Performance Metrics** | Tokens/sec, solve times, latency tracking |
 | 📝 **Detailed Tracing** | Every step persisted with full context |
@@ -78,14 +80,15 @@ After running benchmarks, use the `visualize` command to replay runs with an ani
 
 ### Visualization Features
 
-- **4x4 Word Grid** - Words displayed in a grid just like the real game
-- **Animated Transitions** - Watch the game unfold step by step
-- **Color-Coded Groups** - Found groups stack at top with difficulty colors (🟡 yellow, 🟢 green, 🔵 blue, 🟣 purple)
-- **Hearts Indicator** - Visual mistakes remaining (❤️ ❤️ ❤️ ❤️)
-- **Progress Bar** - Track completion percentage
+- **Fixed 4×4 Grid** - Consistent grid dimensions maintained throughout gameplay
+- **Pure Ink Components** - Built entirely with React for terminals (no hand-coded ANSI)
+- **Animated Transitions** - Watch the game unfold step by step with smooth updates
+- **Color-Coded Groups** - Found groups stack at top with difficulty colors (🟨 yellow, 🟩 green, 🟦 blue, 🟪 purple)
+- **Hearts Indicator** - Visual mistakes remaining (♥ ♥ ♥ ♥)
+- **Progress Bar** - Track completion percentage with gradient fills
 - **Interactive Mode** - Step through at your own pace with keyboard
 - **Multi-Game Grid** - Watch multiple games side-by-side in a grid layout
-- **Pretty Borders** - Rounded corners and clean card-based design
+- **Rounded Borders** - Clean card-based design with flexbox layouts
 
 ### Usage
 
@@ -196,6 +199,62 @@ Watch multiple runs simultaneously with `--grid`:
 
 ---
 
+## 🏆 Global Leaderboard
+
+View aggregate statistics and rankings across all completed runs:
+
+```bash
+# View overall leaderboard
+bun run cli leaderboard
+
+# Filter by game type
+bun run cli leaderboard --type connections
+
+# Filter by date (runs since a specific date)
+bun run cli leaderboard --since 2024-01-01
+
+# Show top 10 models only
+bun run cli leaderboard --limit 10
+
+# Sort by different metrics
+bun run cli leaderboard --sort wins      # Total wins (default)
+bun run cli leaderboard --sort rate      # Win rate percentage
+bun run cli leaderboard --sort cost      # Lowest cost
+bun run cli leaderboard --sort tokens    # Total tokens used
+bun run cli leaderboard --sort speed     # Fastest tokens/sec
+```
+
+### Leaderboard Display
+
+```
+🏆 Global Leaderboard - Connections
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Rank  Model                              Wins  Loss  Rate     Tokens    Cost        Tok/s    Trend
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🥇  google/gemini-3-flash-preview       15    10    60.0%    342.5K    $0.1234     298/s    ↗️ W3
+🥈  anthropic/claude-3-haiku             12    8     60.0%    456.2K    $0.2341     245/s    ↗️ W2  
+🥉  openai/gpt-4o-mini                   11    9     55.0%    298.1K    $0.0987     312/s    ↘️ L1
+4   google/gemini-2.5-flash              8     12    40.0%    287.3K    $0.0912     198/s    ↘️ L2
+
+Top 5 Win Rate History:
+▁▂▃▅██ google/gemini-3-flash-preview
+▂▃▄▅▆█ anthropic/claude-3-haiku
+▄▅▅▆▅▅ openai/gpt-4o-mini
+▆▅▄▃▃▂ google/gemini-2.5-flash
+```
+
+### Leaderboard Features
+
+- **Aggregate Statistics** - Combines all runs across all suites
+- **Win/Loss Tracking** - Total games won and lost per model
+- **Cost Analysis** - Total API costs and efficiency metrics
+- **Performance Trends** - Win/loss streaks with arrows (↗️ ↘️)
+- **Sparkline Charts** - Visual win rate history for top models
+- **Flexible Filtering** - By game type, date range, and sort criteria
+- **Medal Rankings** - Top 3 models highlighted with 🥇🥈🥉
+
+---
+
 ## 📊 Live Dashboard
 
 When you run a benchmark, you'll see a real-time dashboard:
@@ -263,6 +322,9 @@ bun run cli run -s <suite.json> [-o <output-dir>] [--dry-run] [--no-dashboard]
 # Visualize completed runs
 bun run cli visualize [options]
 
+# View global leaderboard (aggregate stats from all runs)
+bun run cli leaderboard [--type connections|crossword] [--since <date>] [--limit <n>]
+
 # Normalize raw data
 bun run cli normalize -t connections|crossword
 
@@ -279,6 +341,7 @@ bun run cli models [-f <filter>]
 |---------|-------------|
 | `run` | Execute a benchmark suite with live dashboard |
 | `visualize` | Replay runs with animated game-like visualization |
+| `leaderboard` | View global statistics and rankings across all runs |
 | `normalize` | Convert raw puzzle data to normalized format |
 | `list` | Display available puzzles |
 | `models` | Query available models from OpenRouter |
@@ -343,12 +406,19 @@ NYT_Arena/
 │   ├── environments/         # Game simulators
 │   │   ├── ConnectionsEnv.ts # NYT Connections game
 │   │   └── CrosswordEnv.ts   # NYT Crossword game
+│   ├── leaderboard/          # Global leaderboard
+│   │   └── index.ts          # Aggregate statistics
 │   ├── runner/               # Benchmark runners
 │   │   ├── runner.ts         # Legacy runner
 │   │   └── concurrent-runner.ts # Per-model workers
 │   ├── schemas/              # Zod validation schemas
 │   └── visualizer/           # Run visualization
-│       └── index.ts          # Animated game replay
+│       ├── components/       # Pure Ink React components
+│       │   ├── GameCard.tsx  # Fixed 4×4 game card
+│       │   ├── MultiGameVisualizer.tsx # Grid view
+│       │   ├── SingleGameVisualizer.tsx # Single game
+│       │   └── App.tsx       # Main visualizer app
+│       └── index.ts          # Entry point
 ├── data/
 │   ├── raw/                  # Raw puzzle data
 │   └── normalized/           # Canonical JSON format

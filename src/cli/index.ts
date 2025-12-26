@@ -10,6 +10,7 @@ import type {
   Manifest,
 } from "../schemas/puzzles.js";
 import { visualizeRun } from "../visualizer/index.js";
+import { showLeaderboard } from "../leaderboard/index.js";
 
 // ========================================
 // Logger
@@ -528,6 +529,53 @@ program
         interactive: options.interactive,
         grid: options.grid ? parseInt(options.grid, 10) : 0,
         columns: parseInt(options.columns, 10),
+      });
+    } catch (error) {
+      console.error(chalk.red("\nError:"), error);
+      process.exit(1);
+    }
+  });
+
+// ========================================
+// Leaderboard Command
+// ========================================
+
+program
+  .command("leaderboard")
+  .description("View global model leaderboard across all benchmark runs")
+  .option("-t, --type <type>", "Filter by puzzle type (connections or crossword)")
+  .option("--since <date>", "Only include runs after this date (YYYY-MM-DD)")
+  .option("-l, --limit <n>", "Number of models to display", "20")
+  .option(
+    "--sort <by>",
+    "Sort by: wins, rate, cost, tokens, speed",
+    "rate",
+  )
+  .option("-o, --output <dir>", "Runs directory", "runs")
+  .action(async (options) => {
+    try {
+      const validTypes = ["connections", "crossword"];
+      if (options.type && !validTypes.includes(options.type)) {
+        console.error(
+          chalk.red(`Invalid type: ${options.type}. Must be one of: ${validTypes.join(", ")}`),
+        );
+        process.exit(1);
+      }
+
+      const validSortOptions = ["wins", "rate", "cost", "tokens", "speed"];
+      if (options.sort && !validSortOptions.includes(options.sort)) {
+        console.error(
+          chalk.red(`Invalid sort option: ${options.sort}. Must be one of: ${validSortOptions.join(", ")}`),
+        );
+        process.exit(1);
+      }
+
+      await showLeaderboard({
+        runsDir: options.output,
+        type: options.type,
+        since: options.since,
+        limit: parseInt(options.limit, 10),
+        sortBy: options.sort,
       });
     } catch (error) {
       console.error(chalk.red("\nError:"), error);

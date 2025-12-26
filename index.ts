@@ -59,6 +59,13 @@ export type {
   GlobalStats,
 } from "./src/dashboard/types.js";
 
+// Leaderboard
+export { showLeaderboard } from "./src/leaderboard/index.js";
+export type {
+  LeaderboardOptions,
+  ModelStats,
+} from "./src/leaderboard/index.js";
+
 // CLI entry point
 if (import.meta.main) {
   await import("./src/cli/index.js");
